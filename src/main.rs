@@ -11,6 +11,10 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use rocket::{State};
 use rocket::config::{Config, Environment, Value};
 use std::collections::HashMap;
+use std::convert::Infallible;
+use rocket_contrib::databases::r2d2_mongodb::mongodb::db::ThreadedDatabase;
+#[macro_use(bson, doc)]
+extern crate bson;
 
 #[derive(Serialize, Deserialize)]
 struct Post {
@@ -32,15 +36,19 @@ fn all_posts(ex_state: State<ExampleState>) -> String {
 }
 
 #[post("/posts", format = "json", data = "<post>")]
-fn save_post<'a>(post: Json<Post>) -> String {
-    String::from(&post.text)
+fn save_post(post: Json<Post>, conn: MyDatabase) -> Result<String, Infallible> {
+    let collection = conn.0.collection("posts");
+    let doc = doc! {"author":&post.author, "text": &post.text};
+    collection.insert_one(doc, None).unwrap();
+
+    Ok(String::from(&post.text))
 }
 
 fn main() {
     let mut database_config = HashMap::new();
     let mut databases = HashMap::new();
 
-    database_config.insert("url", Value::from("mongodb://root:rootpassword@localhost:27017/admin"));
+    database_config.insert("url", Value::from("mongodb://one:two@localhost:27017/one"));
     databases.insert("mongodb", Value::from(database_config));
 
     let config = Config::build(Environment::Development)

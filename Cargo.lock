@@ -1197,6 +1197,7 @@ dependencies = [
 name = "rchirp"
 version = "0.1.0"
 dependencies = [
+ "bson",
  "rocket",
  "rocket_contrib",
  "serde",
