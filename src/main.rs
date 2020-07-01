@@ -13,10 +13,16 @@ use rocket::config::{Config, Environment, Value};
 use std::collections::HashMap;
 use std::convert::Infallible;
 use rocket_contrib::databases::r2d2_mongodb::mongodb::db::ThreadedDatabase;
+use rocket::response::{status, content};
+
+#[macro_use]
+extern crate rocket_contrib;
+#[macro_use]
+extern crate serde;
 #[macro_use(bson, doc)]
 extern crate bson;
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 struct Post {
     text: String,
     author: String,
@@ -35,13 +41,19 @@ fn all_posts(ex_state: State<ExampleState>) -> String {
     format!("counter: {}", v)
 }
 
+#[get("/posts/<id>")]
+fn one_post(id: usize, conn: MyDatabase) -> Json<Post> {
+    let post = Post { text: id.to_string(), author: "a".parse().unwrap() };
+    Json(post)
+}
+
 #[post("/posts", format = "json", data = "<post>")]
-fn save_post(post: Json<Post>, conn: MyDatabase) -> Result<String, Infallible> {
+fn save_post(post: Json<Post>, conn: MyDatabase) -> status::Accepted<()>{
     let collection = conn.0.collection("posts");
     let doc = doc! {"author":&post.author, "text": &post.text};
     collection.insert_one(doc, None).unwrap();
 
-    Ok(String::from(&post.text))
+    status::Accepted::<()>(None)
 }
 
 fn main() {
@@ -60,7 +72,7 @@ fn main() {
 
     rocket::custom(config)
         .attach(MyDatabase::fairing())
-        .mount("/api/v1/", routes![all_posts, save_post])
+        .mount("/api/v1/", routes![one_post, all_posts, save_post])
         .launch();
 }
 
