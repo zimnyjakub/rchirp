@@ -7,19 +7,13 @@ use rocket_contrib::json::Json;
 use rocket_contrib::databases::mongodb;
 use rocket_contrib::databases::database;
 use serde::{Serialize, Deserialize};
-use std::sync::atomic::{AtomicUsize, Ordering};
-use rocket::{State};
 use rocket::config::{Config, Environment, Value};
 use std::collections::HashMap;
-use std::convert::Infallible;
 use rocket_contrib::databases::r2d2_mongodb::mongodb::db::ThreadedDatabase;
 use rocket::response::{status, content};
+use bson::Bson;
 
 #[macro_use]
-extern crate rocket_contrib;
-#[macro_use]
-extern crate serde;
-#[macro_use(bson, doc)]
 extern crate bson;
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -28,17 +22,27 @@ struct Post {
     author: String,
 }
 
-struct ExampleState {
-    count: AtomicUsize
-}
-
 #[database("mongodb")]
 struct MyDatabase(mongodb::db::Database);
 
 #[get("/posts")]
-fn all_posts(ex_state: State<ExampleState>) -> String {
-    let v = ex_state.count.load(Ordering::Relaxed);
-    format!("counter: {}", v)
+fn all_posts(conn: MyDatabase) -> Json<Vec<Post>> {
+    let collection = conn.0.collection("posts");
+    let mut cursor = collection.find(None, None).unwrap();
+    let mut all = Vec::new();
+
+    while let Some(result) = cursor.next() {
+        match result {
+            Ok(document) => {
+                all.push(Post {
+                    text: document.get("text").and_then(Bson::as_str).unwrap_or("").to_string(),
+                    author: document.get("author").and_then(Bson::as_str).unwrap_or("").to_string(),
+                })
+            }
+            Err(_) => {}
+        }
+    }
+    Json(all)
 }
 
 #[get("/posts/<id>")]
